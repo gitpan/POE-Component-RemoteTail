@@ -9,7 +9,7 @@ use Class::Inspector;
 use constant DEBUG => 0;
 use UNIVERSAL::require;
 
-our $VERSION = '0.01001';
+our $VERSION = '0.01002';
 
 *debug = DEBUG
   ? sub {
