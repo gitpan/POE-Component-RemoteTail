@@ -3,16 +3,9 @@ package POE::Component::RemoteTail::Job;
 use strict;
 use warnings;
 
-my $id = 0;
 sub new {
     my $class = shift;
-    my $ID = $$ . '_'. ++$id;
-    my $self = bless {@_, id => $ID}, $class;
-}
-
-sub ID {
-    my $self= shift;
-    return $self->{id};
+    my $self = bless {@_}, $class;
 }
 
 1;
@@ -30,8 +23,6 @@ POE::Component::RemoteTail::Job - Job class.
 =head1 METHOD
 
 =head2 new()
-
-=head2 ID()
 
 =head1 AUTHOR
 

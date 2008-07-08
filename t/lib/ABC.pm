@@ -1,9 +1,8 @@
-use POE::Component::RemoteTail::Engine::NetSSHPerl;
+use ABC;
 
 use strict;
 use warnings;
 use Net::SSH::Perl;
-use POE::Component::IKC::ClientLite;
 
 sub new {
     my $class = shift;
@@ -15,14 +14,6 @@ sub new {
 sub process_entry {
     my $self  = shift;
     my $arg   = shift;
-
-    my $client_name = "Client$$";
-    my $remote      = create_ikc_client(
-        port    => $arg->{port},
-        name    => $client_name,
-        timeout => 5
-    );
-    die $POE::Component::IKC::ClientLite::error unless $remote;
 
     my $host     = $arg->{host};
     my $path     = $arg->{path};
@@ -36,10 +27,9 @@ sub process_entry {
         "stdout",
         sub {
             my ( $channel, $buffer ) = @_;
-            my $ret =
-              $remote->post_respond( 'tailer/ikc_logger',
-                [ $host, $buffer->bytes ] );
-            unless ($ret) { exit; }
+            my $log = $buffer->bytes;
+            print $log;
+            unless ($log) { exit; }
         }
     );
     my ( $stdout, $stderr, $exit ) = $ssh->cmd($cmd);

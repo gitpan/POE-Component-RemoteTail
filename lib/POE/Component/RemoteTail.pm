@@ -3,16 +3,13 @@ package POE::Component::RemoteTail;
 use strict;
 use warnings;
 use POE;
-use POE::Component::RemoteTail::Job;
-use POE::Component::IKC::Server;
 use POE::Wheel::Run;
-use POE::Filter::Reference;
+use POE::Component::RemoteTail::Job;
 use Class::Inspector;
-use Data::Dumper;
 use constant DEBUG => 0;
 use UNIVERSAL::require;
 
-our $VERSION = '0.00001_00';
+our $VERSION = '0.01001';
 
 *debug = DEBUG
   ? sub {
@@ -26,53 +23,49 @@ sub spawn {
     my $self  = $class->new(@_);
 
     $self->{alias} ||= "tailer";
-    $self->{port}  ||= 9999;
-    $self->{name}  ||= "RemoteTail";
+    $self->{session_id} =
+      POE::Session->create(
+        object_states => [ $self => Class::Inspector->methods($class) ], )
+      ->ID();
 
-    POE::Component::IKC::Server->spawn(
-        port => $self->{port},
-        name => $self->{name},
-    );
-
-    POE::Session->create(
-        object_states => [ $self => Class::Inspector->methods($class) ], );
-
+    return $self;
 }
 
 sub new {
     my $class = shift;
-    my %args  = @_;
 
-    return bless {%args}, $class;
+    return bless {@_}, $class;
+}
+
+sub session_id {
+    return shift->{session_id};
 }
 
 sub job {
     my $self = shift;
-    my %args = @_;
 
-    my $job = POE::Component::RemoteTail::Job->new(%args);
+    my $job = POE::Component::RemoteTail::Job->new(@_);
     return $job;
 }
 
-sub execute {
+sub start_tail {
     my ( $self, $kernel, $session, $heap, $arg ) =
       @_[ OBJECT, KERNEL, SESSION, HEAP, ARG0 ];
 
-    $heap->{postback} = $arg->{postback};
-    my $job = $arg->{job};
-    $job->{port} = $self->{port};
-
-    $kernel->post( $session, "_spawn_child" => $job );
+    $arg->{postback} and $heap->{postback} = $arg->{postback};
+    $kernel->post( $session, "_spawn_child" => $arg->{job} );
 }
 
 sub stop_tail {
-    my ( $self, $kernel, $session, $heap, $job ) =
+    my ( $self, $kernel, $session, $heap, $arg ) =
       @_[ OBJECT, KERNEL, SESSION, HEAP, ARG0 ];
 
+    my $job = $arg->{job};
     debug("STOP:$job->{id}");
-    my $task = $heap->{task}->{ $job->{id} };
-    $task->kill;
-    delete $heap->{task}->{ $job->{id} };
+    my $wheel = $heap->{wheel}->{ $job->{id} };
+    $wheel->kill(9);
+    delete $heap->{wheel}->{ $job->{id} };
+    delete $heap->{host}->{ $job->{id} };
     undef $job;
 }
 
@@ -80,17 +73,14 @@ sub _start {
     my ( $self, $kernel ) = @_[ OBJECT, KERNEL ];
 
     $kernel->alias_set( $self->{alias} );
-    $kernel->call( IKC => publish => $self->{alias}, ["_ikc_logger"] );
+    $kernel->sig( INT => "_stop" );
 }
 
-sub _ikc_logger {
-    my ( $self, $kernel, $heap, $request ) = @_[ OBJECT, KERNEL, HEAP, ARG0 ];
+sub _stop {
+    my ( $self, $kernel, $heap ) = @_[ OBJECT, KERNEL, HEAP ];
 
-    my ( $data, $rsvp ) = @$request;
-    my ( $host, $log )  = @$data;
-
-    $heap->{postback}->( $host, $log );
-    $kernel->call( IKC => post => $rsvp, 1 );
+    my ( $whee_id, $wheel ) = each %{ $heap->{wheel} };
+    $wheel and $wheel->kill(9);
 }
 
 sub _spawn_child {
@@ -99,14 +89,24 @@ sub _spawn_child {
 
     # prepare ...
     my $class = $job->{process_class};
-    $class->require or die(@!);
-    $class->new();
+    my $host  = $job->{host};
+    my $path  = $job->{path};
+    my $user  = $job->{user};
 
-    my %program = ( Program => sub { $class->process_entry($job) }, );
+    # default Program ( go on a simple unix command )
+    my %program = ( Program => "ssh -A $user\@$host tail -f $path" );
+
+    # use custom class
+    if ( my $class = $job->{process_class} ) {
+        $class->require or die(@!);
+        $class->new();
+        %program = ( Program => sub { $class->process_entry($job) }, );
+    }
+
     $SIG{CHLD} = "IGNORE";
 
     # run wheel
-    my $task = POE::Wheel::Run->new(
+    my $wheel = POE::Wheel::Run->new(
         %program,
         StdioFilter => POE::Filter::Line->new(),
         StdoutEvent => "_got_child_stdout",
@@ -114,13 +114,25 @@ sub _spawn_child {
         CloseEvent  => "_got_child_close",
     );
 
-    $heap->{task}->{ $task->ID } = $task;
-    $job->{id} = $task->ID;
+    my $id = $wheel->ID;
+    $heap->{wheel}->{$id} = $wheel;
+    $heap->{host}->{$id}  = $host;
+    $job->{id}            = $id;
 }
 
 sub _got_child_stdout {
-    my $stdout = $_[ARG0];
+    my ( $kernel, $session, $heap, $stdout, $wheel_id ) =
+      @_[ KERNEL, SESSION, HEAP, ARG0, ARG1 ];
     debug("STDOUT:$stdout");
+
+    my $host = $heap->{host}->{$wheel_id};
+
+    if ( $heap->{postback} ) {
+        $heap->{postback}->( $stdout, $host );
+    }
+    else {
+        print $stdout, $host;
+    }
 }
 
 sub _got_child_stderr {
@@ -129,9 +141,9 @@ sub _got_child_stderr {
 }
 
 sub _got_child_close {
-    my ( $heap, $task_id ) = @_[ HEAP, ARG0 ];
-    delete $heap->{task}->{$task_id};
-    debug("CLOSE:$task_id");
+    my ( $heap, $wheel_id ) = @_[ HEAP, ARG0 ];
+    delete $heap->{wheel}->{$wheel_id};
+    debug("CLOSE:$wheel_id");
 }
 
 1;
@@ -140,7 +152,7 @@ __END__
 
 =head1 NAME
 
-POE::Component::RemoteTail -
+POE::Component::RemoteTail - tail to remote server's access_log on ssh connection.
 
 =head1 SYNOPSIS
 
@@ -150,34 +162,34 @@ POE::Component::RemoteTail -
   my $alias = 'Remote_Tail';
   
   # spawn component
-  POE::Component::RemoteTail->spawn( alias => $alias );
+  my $tailer = POE::Component::RemoteTail->spawn( alias => $alias );
+  
+  # create job
+  my $job = $tailer->job(
+      host          => $host,
+      path          => $path,
+      user          => $user,
+  );
   
   # prepare the postback subroutine at main POE session
   POE::Session->create(
       inline_states => {
           _start => sub {
               my ( $kernel, $session ) = @_[ KERNEL, SESSION ];
-  
-              # create job
-              my $job = POE::Component::RemoteTail->job(
-                  host          => $host,
-                  path          => $path,
-                  user          => $user,
-                  password      => $password,
-                  process_class => "POE::Component::RemoteTail::Engine::Default",
-              );
+              # create postback
+              my $postback = $session->postback("MyPostback");
   
               # post to execute
               $kernel->post( $alias,
-                  "execute" => { postback => "mypostback", job => $job } );
+                  "start_tail" => { job => $job, postback => $postback } );
           },
   
           # return to here
-          mypostback => sub {
+          MyPostback => sub {
               my ( $kernel, $session, $data ) = @_[ KERNEL, SESSION, ARG1 ];
               my $host = $data->[0];
               my $log  = $data->[1];
-              ... do something ...
+              ... do something ...;
           },
       },
   );
@@ -187,7 +199,65 @@ POE::Component::RemoteTail -
 
 =head1 DESCRIPTION
 
-POE::Component::RemoteTail is
+POE::Component::RemoteTail provides some loop events that tailing access_log on remote host.
+It replaces "ssh -A user@host tail -f access_log" by the same function.
+
+This moduel does not allow 'PasswordAuthentication'. 
+Use RSA or DSA keys, or you must write your Custom Engine with this module.
+( ex. POE::Component::RemoteTail::CustomEngine::NetSSHPerl.pm )
+
+
+=head1 EXAMPLE
+
+If you don't prepare 'postback', PoCo::RemoteTail outputs log data to child process's STDOUT.
+
+  use POE::Component::RemoteTail;
+  
+  my $tailer = POE::Component::RemoteTail();
+  my $job = $tailer->job( host => $host, path => $path, user => $user );
+  POE::Session->create(
+      inlines_states => {
+          _start => sub {
+              $kernel->post($tailer->session_id, "start_tail" => {job => $job}); 
+          },
+      }
+  );
+  POE::Kernel->run();
+
+
+It can tail several servers at the same time.
+
+  use POE::Component::RemoteTail;
+  
+  my $tailer = POE::Component::RemoteTail(alias => $alias);
+
+  my $job_1 = $tailer->job( host => $host1, path => $path, user => $user );
+  my $job_2 = $tailer->job( host => $host2, path => $path, user => $user );
+
+  POE::Session->create(
+      inlines_states => {
+          _start => sub {
+              my $postback = $session->postback("MyPostback");
+              $kernel->post($alias, "start_tail" => {job => $job_1, postback => $postback}); 
+              $kernel->post($alias, "start_tail" => {job => $job_2, postback => $postback}); 
+              $kernel->delay_add("stop_tail", 10, [ $job_1 ]);
+              $kernel->delay_add("stop_tail", 20, [ $job_1 ]);
+          },
+          MyPostback => sub {
+              my ( $kernel, $session, $data ) = @_[ KERNEL, SESSION, ARG1 ];
+              my $host = $data->[0];
+              my $log  = $data->[1];
+              ... do something ...;
+          },
+          stop_tail => sub {
+              my ( $kernel, $session, $arg ) = @_[ KERNEL, SESSION, ARG0 ];
+              my $target_job = $arg->[0];
+              $kernel->post( $alias, "stop_tail" => {job => $target_job});
+          },
+      },
+  );
+  POE::Kernel->run();
+
 
 =head1 METHOD
 
@@ -195,9 +265,11 @@ POE::Component::RemoteTail is
 
 =head2 job()
 
-=head2 execute()
+=head2 start_tail()
 
 =head2 stop_tail()
+
+=head2 session_id()
 
 =head2 debug()
 

@@ -4,7 +4,7 @@ use POE::Component::RemoteTail;
 use YAML;
 use List::Util qw(reduce);
 use Data::Dumper;
-use Test::More tests => 2;
+use Test::More tests => 1;
 
 my $test_data = YAML::Load( join '', <DATA> );
 
@@ -28,26 +28,6 @@ my $password = 'fuga';
 }
 
 
-{
-    my @array;
-    for(1..10){
-        my $job = POE::Component::RemoteTail->job(
-            host          => $host,
-            path          => $path,
-            user          => $user,
-            password      => $password,
-            process_class => "POE::Component::RemoteTail::Engine::Default",
-        );
-        push( @array, [split(/_/, $job->{id})]->[1] );
-    }
-    no warnings;
-    my $flag = 0; 
-    reduce {
-        $flag = 1 if $a + 1 != $b; 
-        $b;
-    } @array;
-    is($flag, 0, "job-id's incremental check OK");
-}
 
 
 __DATA__

@@ -1,11 +1,11 @@
 --- 
-abstract: ~
+abstract: tail to remote server's access_log on ssh connection.
 author: 
   - Takeshi Miki <miki@cpan.org>
 build_requires: 
   Test::More: 0
 distribution_type: module
-generated_by: Module::Install version 0.68
+generated_by: Module::Install version 0.70
 license: perl
 meta-spec: 
   url: http://module-build.sourceforge.net/META-spec-v1.3.html
@@ -15,4 +15,4 @@ no_index:
   directory: 
     - inc
     - t
-version: 0.00001_00
+version: 0.01001
