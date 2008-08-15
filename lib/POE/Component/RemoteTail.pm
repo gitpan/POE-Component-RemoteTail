@@ -9,7 +9,7 @@ use Class::Inspector;
 use constant DEBUG => 0;
 use UNIVERSAL::require;
 
-our $VERSION = '0.01003';
+our $VERSION = '0.01004';
 
 *debug = DEBUG
   ? sub {
@@ -187,8 +187,8 @@ POE::Component::RemoteTail - tail to remote server's access_log on ssh connectio
           # return to here
           MyPostback => sub {
               my ( $kernel, $session, $data ) = @_[ KERNEL, SESSION, ARG1 ];
-              my $host = $data->[0];
-              my $log  = $data->[1];
+              my $log  = $data->[0];
+              my $host = $data->[1];
               ... do something ...;
           },
       },
