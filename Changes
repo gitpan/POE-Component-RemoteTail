@@ -1,5 +1,9 @@
 Revision history for Perl extension POE::Component::RemoteTail
 
+0.01003     2008/08/15
+        - correct a mistake of POD
+        - add some 'build_requires' line at Makefile.PL
+
 0.01002     2008/07/09
         - add some 'requires' line at Makefile.PL
 

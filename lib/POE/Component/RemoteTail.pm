@@ -9,7 +9,7 @@ use Class::Inspector;
 use constant DEBUG => 0;
 use UNIVERSAL::require;
 
-our $VERSION = '0.01002';
+our $VERSION = '0.01003';
 
 *debug = DEBUG
   ? sub {
@@ -245,8 +245,8 @@ It can tail several servers at the same time.
           },
           MyPostback => sub {
               my ( $kernel, $session, $data ) = @_[ KERNEL, SESSION, ARG1 ];
-              my $host = $data->[0];
-              my $log  = $data->[1];
+              my $log  = $data->[0];
+              my $host = $data->[1];
               ... do something ...;
           },
           stop_tail => sub {

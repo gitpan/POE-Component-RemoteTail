@@ -60,8 +60,8 @@ POE::Session->create(
         mypostback => sub {
             my ( $kernel, $session, $heap, $data ) =
               @_[ KERNEL, SESSION, HEAP, ARG1 ];
-            my $host = $data->[1];
             my $log  = $data->[0];
+            my $host = $data->[1];
             for ( split( /\n/, $log ) ) {
                 my $http_request = $heap->{log2hr}->convert($_);
                 $kernel->post( "ua", "request", "response", $http_request );
