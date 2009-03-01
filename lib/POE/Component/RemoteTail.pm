@@ -5,11 +5,12 @@ use warnings;
 use POE;
 use POE::Wheel::Run;
 use POE::Component::RemoteTail::Job;
+use IO::Pty;
 use Class::Inspector;
 use constant DEBUG => 0;
 use UNIVERSAL::require;
 
-our $VERSION = '0.01004';
+our $VERSION = '0.01005';
 
 *debug = DEBUG
   ? sub {
@@ -92,9 +93,16 @@ sub _spawn_child {
     my $host  = $job->{host};
     my $path  = $job->{path};
     my $user  = $job->{user};
+    my $ssh_options = $job->{ssh_options};
+    my $add_command = $job->{add_command};
+
+    my $command = "ssh -A";
+    $command .= ' ' . $ssh_options if $ssh_options;
+    $command .= " $user\@$host tail -f $path";
+    $command .= ' ' . $add_command if $add_command;
 
     # default Program ( go on a simple unix command )
-    my %program = ( Program => "ssh -A $user\@$host tail -f $path" );
+    my %program = ( Program => $command );
 
     # use custom class
     if ( my $class = $job->{process_class} ) {
@@ -108,6 +116,7 @@ sub _spawn_child {
     # run wheel
     my $wheel = POE::Wheel::Run->new(
         %program,
+        Conduit => 'pty-pipe',
         StdioFilter => POE::Filter::Line->new(),
         StdoutEvent => "_got_child_stdout",
         StderrEvent => "_got_child_stderr",
@@ -138,6 +147,7 @@ sub _got_child_stdout {
 sub _got_child_stderr {
     my $stderr = $_[ARG0];
     debug("STDERR:$stderr");
+    die("got_child_stderr: $stderr");
 }
 
 sub _got_child_close {
@@ -156,9 +166,10 @@ POE::Component::RemoteTail - tail to remote server's access_log on ssh connectio
 
 =head1 SYNOPSIS
 
+  use POE;
   use POE::Component::RemoteTail;
   
-  my ( $host, $path, $user, $password ) = @target_host_info;
+  my ( $host, $path, $user ) = @target_host_info;
   my $alias = 'Remote_Tail';
   
   # spawn component
@@ -169,6 +180,8 @@ POE::Component::RemoteTail - tail to remote server's access_log on ssh connectio
       host          => $host,
       path          => $path,
       user          => $user,
+      ssh_options   => $ssh_options, # see POE::Component::RemoteTail::Job
+      add_command   => $add_command, # see POE::Component::RemoteTail::Job
   );
   
   # prepare the postback subroutine at main POE session

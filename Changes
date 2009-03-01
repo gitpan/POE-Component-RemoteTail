@@ -1,5 +1,14 @@
 Revision history for Perl extension POE::Component::RemoteTail
 
+0.01005     2009/03/01
+        add some improvement about problems argued in perlmonks
+
+         * http://www.perlmonks.org/?node_id=746039
+
+        - ocrrect a mistake of PoCo::RemoteTail::CustomEngine::NetSSHPerl
+        - error handlings are improved slightly
+        - add some parameters to PoCo::RemoteTail::Job to be albe to use command-line options 
+
 0.01004     2008/08/16
         - correct a mistake of POD, again ( Oops! )
 

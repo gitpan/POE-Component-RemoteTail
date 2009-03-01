@@ -1,8 +1,14 @@
-use POE::Component::RemoteTail::CustomEngine::NetSSHPerl;
+package POE::Component::RemoteTail::CustomEngine::NetSSHPerl;
 
 use strict;
 use warnings;
 use Net::SSH::Perl;
+
+sub new {
+    my $class = shift;
+    my $self  = bless {@_}, $class;
+    return $self;
+}
 
 sub process_entry {
     my $self  = shift;
@@ -73,6 +79,8 @@ POE::Component::RemoteTail::CustomEngine::NetSSHPerl adopts Net::SSH::Perl insid
 Every engine has to override 'process_entry()' method.
 
 =head1 METHOD
+
+=head2 new()
 
 =head2 process_entry()
 
