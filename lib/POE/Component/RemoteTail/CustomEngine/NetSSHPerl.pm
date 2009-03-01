@@ -40,7 +40,7 @@ __END__
 
 =head1 NAME
 
-POE::Component::RemoteTail::Engine::NetSSHPerl - Pure Perl SSH engine
+POE::Component::RemoteTail::CustomEngine::NetSSHPerl - Pure Perl SSH engine
 
 =head1 SYNOPSIS
 
