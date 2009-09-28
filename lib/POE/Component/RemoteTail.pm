@@ -10,7 +10,7 @@ use Class::Inspector;
 use UNIVERSAL::require;
 use Carp;
 
-our $VERSION = '0.01009';
+our $VERSION = '0.01010';
 
 $|++;
 
@@ -78,8 +78,9 @@ sub _start {
 
 sub _stop {
     my ( $self, $kernel, $heap ) = @_[ OBJECT, KERNEL, HEAP ];
-    my ( $whee_id, $wheel ) = each %{ $heap->{wheel} };
-    $wheel and $wheel->kill(9);
+    while ( my ( $whee_id, $wheel ) = each %{ $heap->{wheel} } ) {
+        $wheel and $wheel->kill(9);
+    }
 }
 
 sub _spawn_child {
