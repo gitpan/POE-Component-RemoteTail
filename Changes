@@ -1,6 +1,10 @@
 Revision history for Perl extension POE::Component::RemoteTail
 
-0.01019     2009/09/29
+0.01011     2009/11/24
+        - repackage its project. ( Due to List::Util::PP ?)
+        - fix a POD a little 
+
+0.01010     2009/09/29
         - fix a bug at "sub _stop". thanks to Geoff Kramer.
 
 
